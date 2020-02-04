@@ -7,6 +7,7 @@ import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.util.internal.StringUtil;
+import lombok.extern.slf4j.Slf4j;
 
 import static com.wy.ProxyMessage.TRANSMISSION;
 
@@ -16,6 +17,7 @@ import static com.wy.ProxyMessage.TRANSMISSION;
  * @Description: 真实客户端处理器
  * @Modified: By：
  */
+@Slf4j
 public class RealClientChannelHandler extends SimpleChannelInboundHandler<ByteBuf> {
 
     public RealClientChannelHandler() {
@@ -24,15 +26,9 @@ public class RealClientChannelHandler extends SimpleChannelInboundHandler<ByteBu
 
     @Override
     protected void channelRead0(ChannelHandlerContext ctx, ByteBuf msg) {
-        System.out.println("收到真实服务端返回的数据");
-//        if (msg.readableBytes() >= 5) {
-//            if (msg.readByte() == ProxyMessage.TRANSMISSION && msg.readableBytes() == msg.readInt()) {
-//                ctx.fireChannelRead(msg);
-//                return;
-//            }
-//        }
+        log.info("收到真实服务端返回的数据");
         //获取id
-        String id = ChannelContainer.container.inverse().get(ctx.channel());
+        String id = ChannelContainer.getId(ctx.channel());
         if (StringUtil.isNullOrEmpty(id)) {
             return;
         }
@@ -46,7 +42,7 @@ public class RealClientChannelHandler extends SimpleChannelInboundHandler<ByteBu
         proxyMessage.setData(bytes);
         proxyMessage.setId(Long.parseLong(id));
         //直接转发回服务端
-        Channel client2ServerChannel = ChannelContainer.container.get("client2ServerChannel");
+        Channel client2ServerChannel = ChannelContainer.getChannel("client2ServerChannel");
         client2ServerChannel.writeAndFlush(proxyMessage);
     }
 
@@ -54,8 +50,14 @@ public class RealClientChannelHandler extends SimpleChannelInboundHandler<ByteBu
     public void channelInactive(ChannelHandlerContext ctx) throws Exception {
         String id = ChannelContainer.container.inverse().remove(ctx.channel());
         if (!StringUtil.isNullOrEmpty(id)) {
-            System.out.println("与真实服务端断开连接: id=" + id);
+            log.info("与真实服务端断开连接: id= {}", id);
         }
         super.channelInactive(ctx);
+    }
+
+    @Override
+    public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
+        log.error("exception caught", cause);
+        super.exceptionCaught(ctx, cause);
     }
 }

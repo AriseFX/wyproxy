@@ -3,6 +3,7 @@ package com.wy;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * @Author: wy
@@ -29,6 +30,10 @@ public class ProxyMessage {
      */
     public static final byte DIS_CONNECTION = 0x03;
 
+    /**
+     * 心跳消息
+     */
+    public static final byte HEARTBEAT = 0x04;
 
     private int length;
 

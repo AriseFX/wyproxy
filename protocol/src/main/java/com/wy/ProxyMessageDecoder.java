@@ -28,57 +28,32 @@ public class ProxyMessageDecoder extends LengthFieldBasedFrameDecoder {
     @Override
     protected ProxyMessage decode(ChannelHandlerContext ctx, ByteBuf in) throws Exception {
         in = (ByteBuf) super.decode(ctx, in);
-        System.out.println("开始解码！" + in.hashCode());
-//        in.retain(1);
         //长度
-        if (in.readableBytes() >= 4) {
-            int length = in.readInt();
-            //类型
-            byte type = in.readByte();
-            //id
-            long id = in.readLong();
-            //数据
-            if (length == in.readableBytes()) {
-                byte[] bytes = new byte[length];
-                in.readBytes(bytes);
-                ProxyMessage proxyMessage = new ProxyMessage();
-                proxyMessage.setData(bytes);
-                proxyMessage.setLength(length);
-                proxyMessage.setType(type);
-                proxyMessage.setId(id);
-                System.out.println("解码成功！" + in.hashCode());
-                return proxyMessage;
-//                in.release();
-            }
+        if (in.readableBytes() < 4) {
+            return null;
+        }
+        int length = in.readInt();
+        //类型
+        if (in.readableBytes() < 1) {
+            return null;
+        }
+        byte type = in.readByte();
+        //id
+        if (in.readableBytes() < 8) {
+            return null;
+        }
+        long id = in.readLong();
+        //数据
+        if (length == in.readableBytes()) {
+            byte[] bytes = new byte[length];
+            in.readBytes(bytes);
+            ProxyMessage proxyMessage = new ProxyMessage();
+            proxyMessage.setData(bytes);
+            proxyMessage.setLength(length);
+            proxyMessage.setType(type);
+            proxyMessage.setId(id);
+            return proxyMessage;
         }
         return null;
     }
-
-//    @Override
-//    protected void decode(ChannelHandlerContext ctx, ByteBuf in, List<Object> out) throws Exception {
-//        System.out.println("开始解码！" + in.hashCode());
-//        in.retain(1);
-//        //长度
-//        if (in.readableBytes() >= 4) {
-//            int length = in.readInt();
-//            //类型
-//            byte type = in.readByte();
-//            //id
-//            long id = in.readLong();
-//            //数据
-//            if (length == in.readableBytes()) {
-//                byte[] bytes = new byte[length];
-//                in.readBytes(bytes);
-//                ProxyMessage proxyMessage = new ProxyMessage();
-//                proxyMessage.setData(bytes);
-//                proxyMessage.setLength(length);
-//                proxyMessage.setType(type);
-//                proxyMessage.setId(id);
-//                System.out.println("解码成功！" + in.hashCode());
-//                in.release();
-//                out.add(proxyMessage);
-//            }
-//        }
-//
-//    }
 }

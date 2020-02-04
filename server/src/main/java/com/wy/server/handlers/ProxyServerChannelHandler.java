@@ -8,6 +8,7 @@ import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.util.internal.StringUtil;
+import lombok.extern.slf4j.Slf4j;
 
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
@@ -20,6 +21,7 @@ import java.util.concurrent.atomic.AtomicLong;
  * @Description:
  * @Modified: By：
  */
+@Slf4j
 public class ProxyServerChannelHandler extends SimpleChannelInboundHandler<ByteBuf> {
 
     private static AtomicLong idProducer = new AtomicLong(0);
@@ -42,9 +44,10 @@ public class ProxyServerChannelHandler extends SimpleChannelInboundHandler<ByteB
                 proxyMessage.setLength(bytes.length);
                 proxyMessage.setData(bytes);
                 proxyMessage.setId(Long.parseLong(id));
-                System.out.println("代理服务端收到,id= " + id + "Channel的消息,并转发给代理客户端!");
+                log.info("代理服务端收到,id= {} Channel的消息,并转发给代理客户端!",id);
                 proxy_channel.writeAndFlush(proxyMessage);
             } finally {
+                //引用计数-1
                 msg.release();
             }
             return;
@@ -55,7 +58,7 @@ public class ProxyServerChannelHandler extends SimpleChannelInboundHandler<ByteB
     @Override
     public void channelActive(ChannelHandlerContext ctx) throws Exception {
         Channel userClientChannel = ctx.channel();
-        System.out.println("代理服务端通道激活：" + userClientChannel);
+        log.info("代理服务端通道激活：{}", userClientChannel);
         //说明是浏览器之类的用户端建立的channel
         Channel proxy_channel = ChannelContainer.container.get("proxy_channel");
         if (proxy_channel != null && proxy_channel != userClientChannel) {
@@ -73,9 +76,9 @@ public class ProxyServerChannelHandler extends SimpleChannelInboundHandler<ByteB
             proxyMessage.setLength(bytes.length);
             proxyMessage.setData(bytes);
             proxyMessage.setId(id);
-            System.out.println("与真实客户端连接成功，生成id为:" + id);
+            log.info("与真实客户端连接成功，生成id为:{}", id);
             proxy_channel.writeAndFlush(proxyMessage);
-            System.out.println("发送连接消息给代理客户端，id为:" + id);
+            log.info("发送连接消息给代理客户端，id为:{}", id);
             return;
         }
         super.channelActive(ctx);
@@ -86,13 +89,13 @@ public class ProxyServerChannelHandler extends SimpleChannelInboundHandler<ByteB
         Channel userClientChannel = ctx.channel();
         Channel proxy_channel = ChannelContainer.container.get("proxy_channel");
         if (proxy_channel != null && userClientChannel != proxy_channel) {
-            System.out.println("通道关闭: " + ctx.channel());
+            log.info("通道关闭:{} ", ctx.channel());
             //移除该channel与id映射关系
             String id = ChannelContainer.container.inverse().remove(userClientChannel);
             if (StringUtil.isNullOrEmpty(id)) {
                 return;
             }
-            System.out.println("代理服务端移除channel成功");
+            log.info("代理服务端移除channel成功");
             byte[] bytes = "DIS_CONNECTION".getBytes(StandardCharsets.UTF_8);
 
             ProxyMessage proxyMessage = new ProxyMessage();
@@ -101,10 +104,16 @@ public class ProxyServerChannelHandler extends SimpleChannelInboundHandler<ByteB
             proxyMessage.setData(bytes);
             proxyMessage.setId(Long.parseLong(id));
             proxy_channel.writeAndFlush(proxyMessage);
-            System.out.println("发送断开连接消息给代理客户端! id为：" + id);
+            log.info("发送断开连接消息给代理客户端! id为：{}", id);
             return;
         }
         super.channelInactive(ctx);
+    }
+
+    @Override
+    public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
+        log.error("exception caught", cause);
+        super.exceptionCaught(ctx, cause);
     }
 
 }

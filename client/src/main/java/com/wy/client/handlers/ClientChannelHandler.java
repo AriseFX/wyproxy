@@ -7,9 +7,6 @@ import io.netty.buffer.ByteBuf;
 import io.netty.channel.*;
 import lombok.extern.slf4j.Slf4j;
 
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-
 import static com.wy.ProxyMessage.*;
 
 /**
@@ -21,8 +18,6 @@ import static com.wy.ProxyMessage.*;
 @Slf4j
 public class ClientChannelHandler extends SimpleChannelInboundHandler<ProxyMessage> {
 
-    private ExecutorService executorService = Executors.newSingleThreadExecutor();
-
     private Bootstrap realBootStrap;
 
     public ClientChannelHandler(Bootstrap realBootStrap) {
@@ -32,29 +27,32 @@ public class ClientChannelHandler extends SimpleChannelInboundHandler<ProxyMessa
     protected void channelRead0(ChannelHandlerContext ctx, ProxyMessage msg) throws InterruptedException {
         //传输类型 直接转发给真实客户端
         if (msg.getType() == TRANSMISSION) {
-            System.out.println("代理客户端收到的 传输 消息id为:" + msg.getId());
+            log.info("代理客户端收到的(传输类型)消息id为: {}", msg.getId());
             if (ChannelContainer.container.containsKey(msg.getId() + "")) {
                 Channel client2RealClientChannel = ChannelContainer.container.get(msg.getId() + "");
                 ByteBuf buf = ctx.alloc().buffer(msg.getLength());
                 buf.writeBytes(msg.getData());
-                System.out.println("发送数据给真实客户端, {}" + client2RealClientChannel);
                 client2RealClientChannel.writeAndFlush(buf);
-                //保存channel信息
+                log.info("发送数据给真实服务端!");
             } else {
-                System.out.println("客户端收到的消息中没有该 id");
+                log.info("代理客户端中没有该 id");
             }
         } else if (msg.getType() == CONNECTION) {
             //获取id
             String id = msg.getId() + "";
-            System.out.println("代理客户端收到的 连接 消息id为：" + id);
+            log.info("代理客户端收到的 连接 消息id为：{}", id);
             //连接真实服务端
             try {
                 ChannelFuture sync = realBootStrap.connect("127.0.0.1", 8080).addListener(new ChannelFutureListener() {
                     @Override
                     public void operationComplete(ChannelFuture future) {
-                        Channel channel = future.channel();
-                        ChannelContainer.container.put(id, channel);
-                        System.out.println("连接真实服务端成功! container:" + ChannelContainer.container);
+                        if (future.isSuccess()) {
+                            Channel channel = future.channel();
+                            ChannelContainer.container.put(id, channel);
+                            log.info("连接真实服务端成功! ");
+                        } else {
+                            log.warn("连接失败，请检查真实服务端状态");
+                        }
                     }
 
                 }).sync();
@@ -68,5 +66,11 @@ public class ClientChannelHandler extends SimpleChannelInboundHandler<ProxyMessa
                 channel.close();
             }
         }
+    }
+
+    @Override
+    public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
+        log.error("exception caught", cause);
+        super.exceptionCaught(ctx, cause);
     }
 }

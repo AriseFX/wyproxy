@@ -6,6 +6,9 @@ import io.netty.buffer.ByteBuf;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
+import lombok.extern.slf4j.Slf4j;
+
+import static com.wy.ProxyMessage.*;
 
 /**
  * @Author: wy
@@ -13,13 +16,15 @@ import io.netty.channel.SimpleChannelInboundHandler;
  * @Description: wyProxy客户端->wyProxy服务端
  * @Modified: By：
  */
+@Slf4j
 public class ServerChannelHandler extends SimpleChannelInboundHandler<ProxyMessage> {
 
     protected void channelRead0(ChannelHandlerContext ctx, ProxyMessage msg) {
-        if (msg != null) {
-            if (msg.getType() == ProxyMessage.CONNECTION) {
-                ChannelContainer.container.put("proxy_channel", ctx.channel());
-            } else if (msg.getType() == ProxyMessage.TRANSMISSION) {
+        switch (msg.getType()) {
+            case CONNECTION:
+                ChannelContainer.addMapping("proxy_channel", ctx.channel());
+                break;
+            case TRANSMISSION:
                 //通过id取出channel,转发给浏览器
                 Channel channel = ChannelContainer.container.get(msg.getId() + "");
                 if (channel != null) {
@@ -27,7 +32,20 @@ public class ServerChannelHandler extends SimpleChannelInboundHandler<ProxyMessa
                     buf.writeBytes(msg.getData());
                     channel.writeAndFlush(buf);
                 }
-            }
+                break;
+            case HEARTBEAT:
+                //TODO
+                log.info("收到心跳消息!");
+                break;
+            default:
+                break;
         }
     }
+
+    @Override
+    public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
+        log.error("exception caught", cause);
+        super.exceptionCaught(ctx, cause);
+    }
+
 }
