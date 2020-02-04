@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>org.example</groupId>
+    <artifactId>wyproxy</artifactId>
+    <packaging>pom</packaging>
+    <version>1.0-SNAPSHOT</version>
+    <modules>
+        <module>common</module>
+        <module>protocol</module>
+        <module>server</module>
+        <module>client</module>
+        <module>ioc</module>
+    </modules>
+
+    <dependencies>
+        <dependency>
+            <groupId>io.netty</groupId>
+            <artifactId>netty-all</artifactId>
+            <version>4.1.15.Final</version>
+        </dependency>
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+            <version>1.7.5</version>
+        </dependency>
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-log4j12</artifactId>
+            <version>1.7.5</version>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.5.1</version>
+                <configuration>
+                    <source>1.8</source>
+                    <target>1.8</target>
+                    <encoding>utf-8</encoding>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-shade-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>shade</goal>
+                        </goals>
+                        <configuration>
+                            <transformers>
+                                <transformer
+                                        implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+                                    <!--需要修改的地方，代表是启动的入口类-->
+                                    <mainClass>
+                                        com.wy.server.ServerStarter
+                                    </mainClass>
+                                </transformer>
+                            </transformers>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <!-- <plugin>
+                 <groupId>org.apache.maven.plugins</groupId>
+                 <artifactId>maven-dependency-plugin</artifactId>
+                 <version>2.2</version>
+                 <executions>
+                     <execution>
+                         <id>copy-dependencies</id>
+                         <phase>package</phase>
+                         <goals>
+                             <goal>copy-dependencies</goal>
+                         </goals>
+ &lt;!&ndash;                        <configuration>&ndash;&gt;
+ &lt;!&ndash;                            <outputDirectory>../distribution/proxy-server-${project.version}/lib</outputDirectory>&ndash;&gt;
+ &lt;!&ndash;                            <overWriteReleases>false</overWriteReleases>&ndash;&gt;
+ &lt;!&ndash;                            <overWriteSnapshots>false</overWriteSnapshots>&ndash;&gt;
+ &lt;!&ndash;                            <overWriteIfNewer>true</overWriteIfNewer>&ndash;&gt;
+ &lt;!&ndash;                        </configuration>&ndash;&gt;
+                     </execution>
+                 </executions>
+             </plugin>-->
+        </plugins>
+    </build>
+</project>
