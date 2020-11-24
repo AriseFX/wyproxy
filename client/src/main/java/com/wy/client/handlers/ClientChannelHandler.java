@@ -8,7 +8,7 @@ import io.netty.buffer.ByteBuf;
 import io.netty.channel.*;
 import lombok.extern.slf4j.Slf4j;
 
-import java.nio.charset.StandardCharsets;
+import java.nio.ByteBuffer;
 
 import static com.wy.ProxyMessage.*;
 
@@ -70,9 +70,9 @@ public class ClientChannelHandler extends SimpleChannelInboundHandler<ProxyMessa
                         } else {
                             ProxyMessage proxyMessage = new ProxyMessage();
                             proxyMessage.setType(SERVICE_EXCEPTION);
-                            proxyMessage.setData("503".getBytes(StandardCharsets.UTF_8));
+                            proxyMessage.setData(ByteBuffer.allocate(0));
                             proxyMessage.setId(id);
-                            proxyMessage.setLength("503".getBytes().length);
+                            proxyMessage.setLength(0);
                             ctx.channel().writeAndFlush(proxyMessage);
                             log.warn("连接失败，请检查真实服务端状态");
                         }

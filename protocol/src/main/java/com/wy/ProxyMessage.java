@@ -1,11 +1,11 @@
 package com.wy;
 
 import io.netty.buffer.ByteBuf;
-import io.netty.channel.ChannelHandlerContext;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+
+import java.nio.ByteBuffer;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 
@@ -55,7 +55,7 @@ public class ProxyMessage {
 
     private long id;
 
-    private byte[] data;
+    private ByteBuffer data;
 
     public static byte[] _503bytes = "503".getBytes(UTF_8);
 

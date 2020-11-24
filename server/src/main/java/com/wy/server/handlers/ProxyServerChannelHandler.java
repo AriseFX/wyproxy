@@ -10,8 +10,7 @@ import io.netty.util.ReferenceCountUtil;
 import io.netty.util.internal.StringUtil;
 import lombok.extern.slf4j.Slf4j;
 
-import java.net.InetSocketAddress;
-import java.nio.charset.StandardCharsets;
+import java.nio.ByteBuffer;
 import java.util.concurrent.atomic.LongAdder;
 
 
@@ -45,12 +44,10 @@ public class ProxyServerChannelHandler extends SimpleChannelInboundHandler<ByteB
             }
             try {
                 String id = ChannelContainer.getId(ctx.channel());
-                byte[] bytes = new byte[msg.readableBytes()];
-                msg.readBytes(bytes);
                 ProxyMessage proxyMessage = new ProxyMessage();
                 proxyMessage.setType(ProxyMessage.TRANSMISSION);
-                proxyMessage.setLength(bytes.length);
-                proxyMessage.setData(bytes);
+                proxyMessage.setLength(msg.readableBytes());
+                proxyMessage.setData(msg.nioBuffer());
                 proxyMessage.setId(Long.parseLong(id));
                 log.info("代理服务端收到,id= {} Channel的消息,并转发给代理客户端!", id);
                 proxy_channel.writeAndFlush(proxyMessage);
@@ -78,13 +75,13 @@ public class ProxyServerChannelHandler extends SimpleChannelInboundHandler<ByteB
             //用户的client channel
             ChannelContainer.addMapping(id + "", userClientChannel);
             //用户端的地址信息
-            InetSocketAddress sa = (InetSocketAddress) userClientChannel.localAddress();
-            byte[] bytes = (sa.getPort() + "").getBytes(StandardCharsets.UTF_8);
+//            InetSocketAddress sa = (InetSocketAddress) userClientChannel.localAddress();
+//            byte[] bytes = (sa.getPort() + "").getBytes(StandardCharsets.UTF_8);
 
             ProxyMessage proxyMessage = new ProxyMessage();
             proxyMessage.setType(ProxyMessage.CONNECTION);
-            proxyMessage.setLength(bytes.length);
-            proxyMessage.setData(bytes);
+            proxyMessage.setLength(0);
+            proxyMessage.setData(ByteBuffer.allocate(0));
             proxyMessage.setId(id);
             proxy_channel.writeAndFlush(proxyMessage);
             log.info("发送【连接】消息给代理客户端，id为:{}", id);
@@ -105,12 +102,11 @@ public class ProxyServerChannelHandler extends SimpleChannelInboundHandler<ByteB
                 return;
             }
             log.info("代理服务端移除channel成功");
-            byte[] bytes = "DIS_CONNECTION".getBytes(StandardCharsets.UTF_8);
 
             ProxyMessage proxyMessage = new ProxyMessage();
             proxyMessage.setType(ProxyMessage.DIS_CONNECTION);
-            proxyMessage.setLength(bytes.length);
-            proxyMessage.setData(bytes);
+            proxyMessage.setLength(0);
+            proxyMessage.setData(ByteBuffer.allocate(0));
             proxyMessage.setId(Long.parseLong(id));
             proxy_channel.writeAndFlush(proxyMessage);
             log.info("发送断开连接消息给代理客户端! id为：{}", id);

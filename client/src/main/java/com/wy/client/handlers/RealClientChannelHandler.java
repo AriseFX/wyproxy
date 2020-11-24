@@ -37,9 +37,7 @@ public class RealClientChannelHandler extends SimpleChannelInboundHandler<ByteBu
         int length = msg.readableBytes();
         proxyMessage.setLength(length);
         proxyMessage.setType(TRANSMISSION);
-        byte[] bytes = new byte[length];
-        msg.readBytes(bytes);
-        proxyMessage.setData(bytes);
+        proxyMessage.setData(msg.nioBuffer());
         proxyMessage.setId(Long.parseLong(id));
         //直接转发回服务端
         Channel client2ServerChannel = ChannelContainer.getProxyChannel();

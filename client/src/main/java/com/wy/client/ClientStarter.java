@@ -16,9 +16,9 @@ import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.util.concurrent.DefaultThreadFactory;
 import lombok.extern.slf4j.Slf4j;
 
-import java.nio.charset.StandardCharsets;
+import java.nio.ByteBuffer;
 
-import static com.wy.ProxyMessage.*;
+import static com.wy.ProxyMessage.CONNECTION;
 
 /**
  * @Author: wy
@@ -84,9 +84,9 @@ public class ClientStarter {
 
                             ProxyMessage proxyMessage = new ProxyMessage();
                             proxyMessage.setType(CONNECTION);
-                            proxyMessage.setData("hello".getBytes(StandardCharsets.UTF_8));
+                            proxyMessage.setData(ByteBuffer.allocate(0));
                             proxyMessage.setId(-1);
-                            proxyMessage.setLength("hello".getBytes().length);
+                            proxyMessage.setLength(0);
                             future.channel().writeAndFlush(proxyMessage);
                         }
                     }).sync();

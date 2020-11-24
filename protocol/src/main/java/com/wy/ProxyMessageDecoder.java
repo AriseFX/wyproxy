@@ -6,7 +6,6 @@ import io.netty.handler.codec.LengthFieldBasedFrameDecoder;
 import lombok.extern.slf4j.Slf4j;
 
 
-
 /**
  * @Author: wy
  * @Date: Created in 22:26 2020/1/29
@@ -16,7 +15,7 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class ProxyMessageDecoder extends LengthFieldBasedFrameDecoder {
 
-    private static final int maxFrameLength = 8192;
+    private static final int maxFrameLength = 8192000;
     private static final int lengthFieldOffset = 4;
     private static final int lengthFieldLength = 4;
     private static final int lengthAdjustment = 9;
@@ -39,10 +38,10 @@ public class ProxyMessageDecoder extends LengthFieldBasedFrameDecoder {
         //id
         long id = in.readLong();
         //数据
-        byte[] bytes = new byte[length];
-        in.readBytes(bytes);
+//        byte[] bytes = new byte[length];
+//        in.readBytes(bytes);
         ProxyMessage proxyMessage = new ProxyMessage();
-        proxyMessage.setData(bytes);
+        proxyMessage.setData(in.nioBuffer());
         proxyMessage.setLength(length);
         proxyMessage.setType(type);
         proxyMessage.setId(id);
