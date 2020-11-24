@@ -11,7 +11,10 @@ import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.*;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
+import io.netty.channel.socket.nio.NioChannelOption;
 import io.netty.channel.socket.nio.NioSocketChannel;
+import io.netty.util.concurrent.DefaultThreadFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.nio.charset.StandardCharsets;
 
@@ -23,25 +26,44 @@ import static com.wy.ProxyMessage.*;
  * @Description:
  * @Modified: By：
  */
+@Slf4j
 public class ClientStarter {
 
-    public static void main(String[] args) {
-        EventLoopGroup eventLoopGroup = null;
-        try {
-            eventLoopGroup = new NioEventLoopGroup();
-            //连接proxy server(连接代理服务端服务端)
-            final Bootstrap proxyBootstrap = new Bootstrap();
-            //连接real server(连接真实服务端)
-            final Bootstrap realBootStrap = new Bootstrap();
-            realBootStrap.group(eventLoopGroup).channel(NioSocketChannel.class)
-                    .handler(new ChannelInitializer<SocketChannel>() {
-                        @Override
-                        protected void initChannel(SocketChannel ch) {
-                            ch.pipeline().addLast(new RealClientChannelHandler());
-                        }
-                    });
+    private final static String remoteHost = System.getProperty("remoteHost", "39.99.222.172");
 
-            proxyBootstrap.group(eventLoopGroup).channel(NioSocketChannel.class)
+    private final static String remotePort = System.getProperty("remotePort", "9888");
+    /**
+     * 连接超时时间
+     */
+    private final static int connectTimeoutMillis = 10 * 1000;
+
+    private static Bootstrap realBootStrap;
+
+    public static void main(String[] args) {
+        startReal();
+        startProxy();
+    }
+
+    public static void startReal() {
+        //real server Bootstrap(连接真实服务端)
+        EventLoopGroup real_eventLoopGroup = new NioEventLoopGroup(0, new DefaultThreadFactory("real_client_worker"));
+        realBootStrap = new Bootstrap();
+        realBootStrap.group(real_eventLoopGroup).channel(NioSocketChannel.class)
+                .option(NioChannelOption.CONNECT_TIMEOUT_MILLIS, connectTimeoutMillis)
+                .handler(new ChannelInitializer<SocketChannel>() {
+                    @Override
+                    protected void initChannel(SocketChannel ch) {
+                        ch.pipeline().addLast(new RealClientChannelHandler());
+                    }
+                });
+    }
+
+    public static void startProxy() {
+        EventLoopGroup proxy_eventLoopGroup = new NioEventLoopGroup(0, new DefaultThreadFactory("client_worker"));
+        try {
+            Bootstrap proxyBootstrap = new Bootstrap();
+            proxyBootstrap.group(proxy_eventLoopGroup).channel(NioSocketChannel.class)
+                    .option(NioChannelOption.CONNECT_TIMEOUT_MILLIS, connectTimeoutMillis)
                     .handler(new ChannelInitializer<SocketChannel>() {
                         @Override
                         protected void initChannel(SocketChannel ch) {
@@ -52,31 +74,29 @@ public class ClientStarter {
                             pipeline.addLast(new ClientChannelHandler(realBootStrap));
                         }
                     });
-            //129.211.25.62  127.0.0.1
-            ChannelFuture channelFuture = proxyBootstrap.connect("127.0.0.1", 9800)
+            ChannelFuture channelFuture = proxyBootstrap.connect(remoteHost, Integer.parseInt(remotePort))
                     .addListener((ChannelFutureListener) future -> {
+                        if (future.isSuccess()) {
+                            log.info("连接代理服务端成功！");
+                            //存入客户端<->服务端 channel
+                            Channel channel = future.channel();
+                            ChannelContainer.setProxyChannel(channel);
 
-                        //存入客户端<->服务端 channel
-                        Channel channel = future.channel();
-                        ChannelContainer.addMapping("client2ServerChannel", channel);
-
-                        ProxyMessage proxyMessage = new ProxyMessage();
-                        proxyMessage.setType(CONNECTION);
-                        proxyMessage.setData("hello".getBytes(StandardCharsets.UTF_8));
-                        proxyMessage.setId(-1);
-                        proxyMessage.setLength("hello".getBytes().length);
-                        future.channel().writeAndFlush(proxyMessage);
-
+                            ProxyMessage proxyMessage = new ProxyMessage();
+                            proxyMessage.setType(CONNECTION);
+                            proxyMessage.setData("hello".getBytes(StandardCharsets.UTF_8));
+                            proxyMessage.setId(-1);
+                            proxyMessage.setLength("hello".getBytes().length);
+                            future.channel().writeAndFlush(proxyMessage);
+                        }
                     }).sync();
             channelFuture.channel().closeFuture().sync();
-        } catch (Exception e) {
+
+        } catch (InterruptedException e) {
             e.printStackTrace();
         } finally {
-            if (eventLoopGroup != null) {
-                eventLoopGroup.shutdownGracefully();
-            }
+            proxy_eventLoopGroup.shutdownGracefully();
         }
-
-
     }
+
 }

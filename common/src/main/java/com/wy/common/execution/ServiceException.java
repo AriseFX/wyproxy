@@ -10,7 +10,7 @@ public class ServiceException extends RuntimeException {
 
     private final String errorMessage;
 
-    public ServiceException( String errorMessage) {
+    public ServiceException(String errorMessage) {
         super(errorMessage);
         this.errorMessage = errorMessage;
     }

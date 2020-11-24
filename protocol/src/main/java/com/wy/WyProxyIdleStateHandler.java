@@ -32,11 +32,11 @@ public class WyProxyIdleStateHandler extends IdleStateHandler {
             proxyMessage.setLength(0);
             proxyMessage.setType(HEARTBEAT);
             //发送心跳消息
-            ctx.channel().writeAndFlush(proxyMessage).addListener((ChannelFutureListener) future -> {
+            ctx.writeAndFlush(proxyMessage).addListener((ChannelFutureListener) future -> {
                 if (!future.isSuccess()) {
                     //失败,移除并关闭相应channel
                     ChannelContainer.remove(ctx.channel());
-                    ctx.channel().close();
+                    ctx.close();
                 }
             });
         }

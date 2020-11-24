@@ -21,13 +21,6 @@ public class ProxyMessageEncoder extends MessageToByteEncoder<ProxyMessage> {
      * @throws Exception
      */
     protected void encode(ChannelHandlerContext ctx, ProxyMessage msg, ByteBuf out) throws Exception {
-        int length = msg.getLength();
-        byte[] data = msg.getData();
-        long id = msg.getId();
-        byte type = msg.getType();
-        out.writeInt(length);
-        out.writeByte(type);
-        out.writeLong(id);
-        out.writeBytes(data);
+        msg.encode(out);
     }
 }

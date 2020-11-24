@@ -5,13 +5,13 @@ import com.wy.ProxyMessageEncoder;
 import com.wy.server.handlers.ProxyServerChannelHandler;
 import com.wy.server.handlers.ServerChannelHandler;
 import io.netty.bootstrap.ServerBootstrap;
-import io.netty.channel.ChannelFuture;
-import io.netty.channel.ChannelInitializer;
-import io.netty.channel.ChannelPipeline;
-import io.netty.channel.EventLoopGroup;
+import io.netty.channel.*;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
+import io.netty.handler.logging.LogLevel;
+import io.netty.handler.logging.LoggingHandler;
+import io.netty.util.concurrent.DefaultThreadFactory;
 
 /**
  * @Author: wy
@@ -22,12 +22,14 @@ import io.netty.channel.socket.nio.NioServerSocketChannel;
 public class ServerStarter {
 
     public static void main(String[] args) {
-        EventLoopGroup bossGroup = new NioEventLoopGroup();
-        EventLoopGroup workerGroup = new NioEventLoopGroup();
+        EventLoopGroup bossGroup = new NioEventLoopGroup(0, new DefaultThreadFactory("boss"));
+        EventLoopGroup workerGroup = new NioEventLoopGroup(0, new DefaultThreadFactory("worker"));
         try {
             ServerBootstrap serverBootstrap = new ServerBootstrap();
             serverBootstrap.group(bossGroup, workerGroup)
                     .channel(NioServerSocketChannel.class)
+                    .handler(new LoggingHandler(LogLevel.INFO))
+                    .option(ChannelOption.SO_KEEPALIVE, true)
                     .childHandler(new ChannelInitializer<SocketChannel>() {
                         @Override
                         protected void initChannel(SocketChannel ch) {
@@ -38,7 +40,9 @@ public class ServerStarter {
                             pipeline.addLast(new ServerChannelHandler());
                         }
                     });
-            ChannelFuture channelFuture = serverBootstrap.bind("0.0.0.0", 9800).sync();
+
+            //获取系统参数
+            ChannelFuture channelFuture = serverBootstrap.bind(System.getProperty("host", "127.0.0.1"), Integer.parseInt(System.getProperty("port", "9888"))).sync();
             channelFuture.channel().closeFuture().sync();
         } catch (InterruptedException e) {
             e.printStackTrace();

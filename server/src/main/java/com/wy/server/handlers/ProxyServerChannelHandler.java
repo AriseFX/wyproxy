@@ -1,18 +1,18 @@
 package com.wy.server.handlers;
 
-import com.google.common.collect.BiMap;
 import com.wy.ProxyMessage;
 import com.wy.common.ChannelContainer;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
+import io.netty.util.ReferenceCountUtil;
 import io.netty.util.internal.StringUtil;
 import lombok.extern.slf4j.Slf4j;
 
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
-import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.LongAdder;
 
 
 /**
@@ -24,7 +24,7 @@ import java.util.concurrent.atomic.AtomicLong;
 @Slf4j
 public class ProxyServerChannelHandler extends SimpleChannelInboundHandler<ByteBuf> {
 
-    private static AtomicLong idProducer = new AtomicLong(0);
+    private static final LongAdder idProducer = new LongAdder();
 
     public ProxyServerChannelHandler() {
         super(false);
@@ -32,11 +32,19 @@ public class ProxyServerChannelHandler extends SimpleChannelInboundHandler<ByteB
 
     @Override
     protected void channelRead0(ChannelHandlerContext ctx, ByteBuf msg) {
-        Channel proxy_channel = ChannelContainer.container.get("proxy_channel");
-        if (proxy_channel != null && proxy_channel != ctx.channel()) {
+        if (ProxyMessage.MAGIC_NUMBER == msg.getInt(0)) {
+            ctx.fireChannelRead(msg);
+            return;
+        }
+        Channel proxy_channel = ChannelContainer.getProxyChannel();
+        if (proxy_channel != null) {
+            //如果当前channel就是proxyChannel(粘包情况下，无法用魔数区分协议)
+            if (ctx.channel() == proxy_channel) {
+                ctx.fireChannelRead(msg);
+                return;
+            }
             try {
-                BiMap<Channel, String> inverseContainer = ChannelContainer.container.inverse();
-                String id = inverseContainer.get(ctx.channel());
+                String id = ChannelContainer.getId(ctx.channel());
                 byte[] bytes = new byte[msg.readableBytes()];
                 msg.readBytes(bytes);
                 ProxyMessage proxyMessage = new ProxyMessage();
@@ -44,15 +52,15 @@ public class ProxyServerChannelHandler extends SimpleChannelInboundHandler<ByteB
                 proxyMessage.setLength(bytes.length);
                 proxyMessage.setData(bytes);
                 proxyMessage.setId(Long.parseLong(id));
-                log.info("代理服务端收到,id= {} Channel的消息,并转发给代理客户端!",id);
+                log.info("代理服务端收到,id= {} Channel的消息,并转发给代理客户端!", id);
                 proxy_channel.writeAndFlush(proxyMessage);
             } finally {
                 //引用计数-1
-                msg.release();
+                ReferenceCountUtil.release(msg);
             }
-            return;
+        } else {
+            ctx.channel().close();
         }
-        ctx.fireChannelRead(msg);
     }
 
     @Override
@@ -60,13 +68,15 @@ public class ProxyServerChannelHandler extends SimpleChannelInboundHandler<ByteB
         Channel userClientChannel = ctx.channel();
         log.info("代理服务端通道激活：{}", userClientChannel);
         //说明是浏览器之类的用户端建立的channel
-        Channel proxy_channel = ChannelContainer.container.get("proxy_channel");
+        Channel proxy_channel = ChannelContainer.getProxyChannel();
         if (proxy_channel != null && proxy_channel != userClientChannel) {
             //发消息使 客户端和真实客户端的建立连接
             //保存到浏览器的channel，识别
-            long id = idProducer.incrementAndGet();
+            idProducer.add(1);
+            long id = idProducer.longValue();
+//            id++;
             //用户的client channel
-            ChannelContainer.container.put(id + "", userClientChannel);
+            ChannelContainer.addMapping(id + "", userClientChannel);
             //用户端的地址信息
             InetSocketAddress sa = (InetSocketAddress) userClientChannel.localAddress();
             byte[] bytes = (sa.getPort() + "").getBytes(StandardCharsets.UTF_8);
@@ -76,22 +86,21 @@ public class ProxyServerChannelHandler extends SimpleChannelInboundHandler<ByteB
             proxyMessage.setLength(bytes.length);
             proxyMessage.setData(bytes);
             proxyMessage.setId(id);
-            log.info("与真实客户端连接成功，生成id为:{}", id);
             proxy_channel.writeAndFlush(proxyMessage);
-            log.info("发送连接消息给代理客户端，id为:{}", id);
+            log.info("发送【连接】消息给代理客户端，id为:{}", id);
             return;
         }
         super.channelActive(ctx);
     }
 
     @Override
-    public void channelInactive(ChannelHandlerContext ctx) throws Exception {
+    public void channelInactive(ChannelHandlerContext ctx) {
         Channel userClientChannel = ctx.channel();
-        Channel proxy_channel = ChannelContainer.container.get("proxy_channel");
+        Channel proxy_channel = ChannelContainer.getProxyChannel();
         if (proxy_channel != null && userClientChannel != proxy_channel) {
             log.info("通道关闭:{} ", ctx.channel());
             //移除该channel与id映射关系
-            String id = ChannelContainer.container.inverse().remove(userClientChannel);
+            String id = ChannelContainer.remove(userClientChannel);
             if (StringUtil.isNullOrEmpty(id)) {
                 return;
             }
@@ -105,15 +114,15 @@ public class ProxyServerChannelHandler extends SimpleChannelInboundHandler<ByteB
             proxyMessage.setId(Long.parseLong(id));
             proxy_channel.writeAndFlush(proxyMessage);
             log.info("发送断开连接消息给代理客户端! id为：{}", id);
-            return;
         }
-        super.channelInactive(ctx);
     }
 
     @Override
-    public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
-        log.error("exception caught", cause);
-        super.exceptionCaught(ctx, cause);
+    public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
+        log.error("代理服务端异常:{}", cause.getMessage());
+        if (ctx.channel() == ChannelContainer.getProxyChannel()) {
+            ChannelContainer.removeAndCloseAll();
+            ChannelContainer.setProxyChannel(null);
+        }
     }
-
 }

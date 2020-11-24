@@ -9,6 +9,7 @@ import io.netty.channel.SimpleChannelInboundHandler;
 import lombok.extern.slf4j.Slf4j;
 
 import static com.wy.ProxyMessage.*;
+import static java.nio.charset.StandardCharsets.UTF_8;
 
 /**
  * @Author: wy
@@ -19,14 +20,15 @@ import static com.wy.ProxyMessage.*;
 @Slf4j
 public class ServerChannelHandler extends SimpleChannelInboundHandler<ProxyMessage> {
 
+
     protected void channelRead0(ChannelHandlerContext ctx, ProxyMessage msg) {
         switch (msg.getType()) {
             case CONNECTION:
-                ChannelContainer.addMapping("proxy_channel", ctx.channel());
+                ChannelContainer.setProxyChannel(ctx.channel());
                 break;
             case TRANSMISSION:
-                //通过id取出channel,转发给浏览器
-                Channel channel = ChannelContainer.container.get(msg.getId() + "");
+                //通过id取出channel,转发给客户端
+                Channel channel = ChannelContainer.getChannel(msg.getId() + "");
                 if (channel != null) {
                     ByteBuf buf = ctx.alloc().buffer(msg.getLength());
                     buf.writeBytes(msg.getData());
@@ -37,15 +39,18 @@ public class ServerChannelHandler extends SimpleChannelInboundHandler<ProxyMessa
                 //TODO
                 log.info("收到心跳消息!");
                 break;
+            case SERVICE_EXCEPTION:
+                log.info("连不上真实客户端!");
+                channel = ChannelContainer.getChannel(msg.getId() + "");
+                if (channel != null) {
+                    ByteBuf buf = ctx.alloc().buffer(msg.getLength());
+                    buf.writeBytes(_503bytes);
+                    channel.writeAndFlush(buf);
+                    channel.close();
+                }
+                break;
             default:
                 break;
         }
     }
-
-    @Override
-    public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
-        log.error("exception caught", cause);
-        super.exceptionCaught(ctx, cause);
-    }
-
 }

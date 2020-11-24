@@ -42,13 +42,13 @@ public class RealClientChannelHandler extends SimpleChannelInboundHandler<ByteBu
         proxyMessage.setData(bytes);
         proxyMessage.setId(Long.parseLong(id));
         //直接转发回服务端
-        Channel client2ServerChannel = ChannelContainer.getChannel("client2ServerChannel");
+        Channel client2ServerChannel = ChannelContainer.getProxyChannel();
         client2ServerChannel.writeAndFlush(proxyMessage);
     }
 
     @Override
     public void channelInactive(ChannelHandlerContext ctx) throws Exception {
-        String id = ChannelContainer.container.inverse().remove(ctx.channel());
+        String id = ChannelContainer.remove(ctx.channel());
         if (!StringUtil.isNullOrEmpty(id)) {
             log.info("与真实服务端断开连接: id= {}", id);
         }
@@ -57,7 +57,9 @@ public class RealClientChannelHandler extends SimpleChannelInboundHandler<ByteBu
 
     @Override
     public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
-        log.error("exception caught", cause);
-        super.exceptionCaught(ctx, cause);
+        log.error("real exception caught:{}", cause.getMessage());
+        ChannelContainer.remove(ctx.channel());
+        ctx.channel().close();
+//        super.exceptionCaught(ctx, cause);
     }
 }
