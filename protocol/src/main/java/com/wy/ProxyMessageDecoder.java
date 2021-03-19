@@ -15,7 +15,7 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class ProxyMessageDecoder extends LengthFieldBasedFrameDecoder {
 
-    private static final int maxFrameLength = 8192000;
+    private static final int maxFrameLength = 1 << 10 << 10;
     private static final int lengthFieldOffset = 4;
     private static final int lengthFieldLength = 4;
     private static final int lengthAdjustment = 9;

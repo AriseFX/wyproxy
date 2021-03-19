@@ -36,10 +36,15 @@ public class ProxyChannelPool {
     private final Queue<PendingTask> pendingAcquireQueue = new ArrayDeque<>();
     private final Deque<Channel> deque = new ConcurrentLinkedDeque<>();
 
-    public ProxyChannelPool(Bootstrap bootstrap, ProxyChannelPoolHandler poolHandler, int maxConnections) {
+    private String host;
+    private int port;
+
+    public ProxyChannelPool(Bootstrap bootstrap, ProxyChannelPoolHandler poolHandler, int maxConnections, String host, int port) {
         this.bootstrap = bootstrap;
         this.poolHandler = poolHandler;
         this.maxConnections = maxConnections;
+        this.host = host;
+        this.port = port;
         eventLoop = bootstrap.config().group().next();
     }
 
@@ -48,7 +53,7 @@ public class ProxyChannelPool {
      *
      * @return
      */
-    public Future<Channel> getChannel() {
+    public Promise<Channel> getChannel() {
         Promise<Channel> channelPromise = bootstrap
                 .config().group().next().newPromise();
         //当前线程是否是当前eventLoop的线程
@@ -59,6 +64,10 @@ public class ProxyChannelPool {
                     getChannel0(channelPromise));
         }
         return channelPromise;
+    }
+
+    public ChannelFuture getNewChannel() {
+        return bootstrap.connect(host, port);
     }
 
     /**
@@ -150,7 +159,7 @@ public class ProxyChannelPool {
     private void createOrFormPool(Promise<Channel> channelPromise) {
         Channel channel = deque.pollFirst();
         if (channel == null) {
-            ChannelFuture cf = bootstrap.connect();
+            ChannelFuture cf = bootstrap.connect(host, port).syncUninterruptibly();
             if (cf.isDone()) {
                 connectNotify(cf, channelPromise);
             } else {
@@ -177,6 +186,14 @@ public class ProxyChannelPool {
                 promise.setFailure(new IllegalAccessException());
                 release(channel);
             }
+        } else {
+            promise.setFailure(new IllegalStateException("call [connect] fail") {
+                //减少爬栈
+                @Override
+                public synchronized Throwable fillInStackTrace() {
+                    return this;
+                }
+            });
         }
     }
 

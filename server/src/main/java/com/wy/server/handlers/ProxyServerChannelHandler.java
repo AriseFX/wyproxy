@@ -71,21 +71,16 @@ public class ProxyServerChannelHandler extends SimpleChannelInboundHandler<ByteB
             //保存到浏览器的channel，识别
             idProducer.add(1);
             long id = idProducer.longValue();
-//            id++;
             //用户的client channel
             ChannelContainer.addMapping(id + "", userClientChannel);
-            //用户端的地址信息
-//            InetSocketAddress sa = (InetSocketAddress) userClientChannel.localAddress();
-//            byte[] bytes = (sa.getPort() + "").getBytes(StandardCharsets.UTF_8);
-
+            //发送连接消息
             ProxyMessage proxyMessage = new ProxyMessage();
             proxyMessage.setType(ProxyMessage.CONNECTION);
             proxyMessage.setLength(0);
             proxyMessage.setData(ByteBuffer.allocate(0));
             proxyMessage.setId(id);
             proxy_channel.writeAndFlush(proxyMessage);
-            log.info("发送【连接】消息给代理客户端，id为:{}", id);
-            return;
+            log.info("发送连接消息给代理客户端! id为：{}", id);
         }
         super.channelActive(ctx);
     }

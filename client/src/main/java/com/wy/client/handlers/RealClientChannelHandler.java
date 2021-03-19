@@ -9,6 +9,9 @@ import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.util.internal.StringUtil;
 import lombok.extern.slf4j.Slf4j;
 
+import java.nio.ByteBuffer;
+
+import static com.wy.ProxyMessage.SERVICE_EXCEPTION;
 import static com.wy.ProxyMessage.TRANSMISSION;
 
 /**
@@ -46,18 +49,30 @@ public class RealClientChannelHandler extends SimpleChannelInboundHandler<ByteBu
 
     @Override
     public void channelInactive(ChannelHandlerContext ctx) throws Exception {
-        String id = ChannelContainer.remove(ctx.channel());
-        if (!StringUtil.isNullOrEmpty(id)) {
-            log.info("与真实服务端断开连接: id= {}", id);
-        }
+        sendDisConnectMsg(ctx);
         super.channelInactive(ctx);
     }
 
     @Override
-    public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
+    public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
         log.error("real exception caught:{}", cause.getMessage());
-        ChannelContainer.remove(ctx.channel());
-        ctx.channel().close();
-//        super.exceptionCaught(ctx, cause);
+        sendDisConnectMsg(ctx);
+    }
+
+    private void sendDisConnectMsg(ChannelHandlerContext ctx) {
+        String id = ChannelContainer.remove(ctx.channel());
+        if (id != null) {
+            log.info("与真实服务端断开连接: id= {}", id);
+            Channel proxyChannel = ChannelContainer.getProxyChannel();
+            if (proxyChannel != null) {
+                ProxyMessage proxyMessage = new ProxyMessage();
+                proxyMessage.setType(SERVICE_EXCEPTION);
+                proxyMessage.setData(ByteBuffer.allocate(0));
+                proxyMessage.setId(Long.parseLong(id));
+                proxyMessage.setLength(0);
+                proxyChannel.writeAndFlush(proxyMessage);
+                log.warn("连接断开，请检查真实服务端状态");
+            }
+        }
     }
 }

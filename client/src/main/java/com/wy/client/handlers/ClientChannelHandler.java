@@ -3,10 +3,12 @@ package com.wy.client.handlers;
 import com.wy.ProxyMessage;
 import com.wy.client.ClientStarter;
 import com.wy.common.ChannelContainer;
-import io.netty.bootstrap.Bootstrap;
+import com.wy.common.ProxyChannelPool;
+import io.netty.bootstrap.AbstractBootstrap;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.*;
 import lombok.extern.slf4j.Slf4j;
+
 
 import java.nio.ByteBuffer;
 
@@ -21,66 +23,63 @@ import static com.wy.ProxyMessage.*;
 @Slf4j
 public class ClientChannelHandler extends SimpleChannelInboundHandler<ProxyMessage> {
 
-    private final Bootstrap realBootStrap;
+    private final ProxyChannelPool proxyChannelPool;
 
-    private final static String localHost = System.getProperty("localHost", "0.0.0.0");
-    private final static String localPort = System.getProperty("localPort", "8099");
-
-    public ClientChannelHandler(Bootstrap realBootStrap) {
-        this.realBootStrap = realBootStrap;
+    public ClientChannelHandler(ProxyChannelPool proxyChannelPool) {
+        this.proxyChannelPool = proxyChannelPool;
     }
 
     protected void channelRead0(ChannelHandlerContext ctx, ProxyMessage msg) {
         //传输类型 直接转发给真实客户端
-        if (msg.getType() == TRANSMISSION) {
-            log.info("代理客户端收到的(传输类型)消息id为: {}", msg.getId());
-            if (ChannelContainer.container.containsKey(msg.getId() + "")) {
-                Channel client2RealClientChannel = ChannelContainer.getChannel(msg.getId() + "");
-                ByteBuf buf = ctx.alloc().buffer(msg.getLength());
-                buf.writeBytes(msg.getData());
-                client2RealClientChannel.writeAndFlush(buf);
-                log.info("发送数据给真实服务端!");
-            } else {
-                connectRealServer(ctx, msg);
-                channelRead0(ctx, msg);
-                log.info("重新连接到真实客户端");
-            }
-        } else if (msg.getType() == CONNECTION) {
-            connectRealServer(ctx, msg);
-        } else if (msg.getType() == DIS_CONNECTION) {
-            Channel channel = ChannelContainer.container.remove(msg.getId() + "");
-            if (channel != null) {
-                channel.close();
-            }
-        }
-    }
-
-    private void connectRealServer(ChannelHandlerContext ctx, ProxyMessage msg) {
-        //获取id
-        long id = msg.getId();
-        log.info("代理客户端收到的 连接 消息id为：{}", id);
-        //连接真实服务端
-        try {
-            ChannelFuture sync = realBootStrap.connect(localHost, Integer.parseInt(localPort))
-                    .addListener((ChannelFutureListener) future -> {
-                        if (future.isSuccess()) {
-                            Channel channel = future.channel();
-                            ChannelContainer.addMapping(id + "", channel);
-                            log.info("连接真实服务端成功! ");
+        String id = msg.getId() + "";
+        switch (msg.getType()) {
+            case TRANSMISSION: {
+                log.info("代理客户端收到的(传输类型)消息id为: {}", id);
+                Channel channel = ChannelContainer.getChannel(id);
+                if (channel == null) {
+                    proxyChannelPool.getNewChannel().addListener((ChannelFutureListener) e -> {
+                        if (e.isSuccess()) {
+                            Channel new_channel = e.channel();
+                            ChannelContainer.addMapping(id, new_channel);
+                            send2RealServer(ctx, msg, new_channel);
                         } else {
                             ProxyMessage proxyMessage = new ProxyMessage();
                             proxyMessage.setType(SERVICE_EXCEPTION);
                             proxyMessage.setData(ByteBuffer.allocate(0));
-                            proxyMessage.setId(id);
+                            proxyMessage.setId(msg.getId());
                             proxyMessage.setLength(0);
                             ctx.channel().writeAndFlush(proxyMessage);
                             log.warn("连接失败，请检查真实服务端状态");
                         }
-                    }).sync();
-            sync.channel().closeFuture();
-        } catch (InterruptedException e) {
-            e.printStackTrace();
+                    }).syncUninterruptibly();
+                } else {
+                    send2RealServer(ctx, msg, channel);
+                }
+                break;
+            }
+            case CONNECTION: {
+                proxyChannelPool.getNewChannel().addListener((ChannelFutureListener) e -> {
+                    if (e.isSuccess()) {
+                        Channel new_channel = e.channel();
+                        ChannelContainer.addMapping(id, new_channel);
+                    }
+                }).syncUninterruptibly();
+                break;
+            }
+            case DIS_CONNECTION: {
+                log.info("客户端收到断开连接消息: {}", id);
+                Channel remove = ChannelContainer.remove(id);
+                remove.close();
+                break;
+            }
         }
+    }
+
+    private void send2RealServer(ChannelHandlerContext ctx, ProxyMessage msg, Channel channel) {
+        ByteBuf buf = ctx.alloc().buffer(msg.getLength());
+        buf.writeBytes(msg.getData());
+        channel.writeAndFlush(buf);
+        log.info("发送数据给真实服务端!");
     }
 
     @Override
